@@ -46,7 +46,7 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
     
-    char *end_ptr;
+    char *end_ptr = NULL;
     const long int user_dots = strtol(argv[ARGV1],&end_ptr,10);
     
     if (*end_ptr != '\0') {
