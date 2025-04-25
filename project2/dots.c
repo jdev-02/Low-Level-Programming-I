@@ -31,6 +31,8 @@
 #define SLEEP_TIME 1
 #define MIN_COL 1
 #define FINAL_ROW 1
+#define REQ_ARGS 2
+#define DECIMAL 10
 
 //prototypes
 int display_dots(const long int number);
@@ -38,7 +40,7 @@ int display_dots(const long int number);
 
 int main(int argc, char *argv[]){
     errno = 0;
-    if (argc != 2){
+    if (argc != REQ_ARGS){
         printf("The program use guide specifies ./dots #_of_dots_you_want_to_see. Enter only two arguments.\n");
         exit(EXIT_FAILURE);
     } if (strcmp(argv[ARGV0],"./dots") != 0) {
@@ -47,7 +49,7 @@ int main(int argc, char *argv[]){
     }
     
     char *end_ptr = NULL;
-    const long int user_dots = strtol(argv[ARGV1],&end_ptr,10);
+    const long int user_dots = strtol(argv[ARGV1],&end_ptr,DECIMAL);
     
     if (*end_ptr != '\0') {
         //if the last char in the string entered is not the null char, strol() stores address of the first invalid char in *endptr
