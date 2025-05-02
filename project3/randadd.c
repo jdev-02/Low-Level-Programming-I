@@ -182,7 +182,8 @@ int get_input(int argc, char *argv[], int *num){
     } 
     //the user has inputed the correct arguments, now process the input they have entered
     long converted_input = strtol(argv[ARGV_NUMBER], &endnum, BASE_10);
-    if (errno != 0 || *endnum != '\0' || argv[1] ==endnum ) {
+    if (errno != 0 || *endnum != '\0' || argv[ARGV_NUMBER] == endnum ) { 
+        //handle strtol errors
         printf("You have entered an invalid argument for the second argument, enter an integer.\n");
         result = BAD_INPUT;
     } 
@@ -190,10 +191,10 @@ int get_input(int argc, char *argv[], int *num){
         printf("Please enter a number between 1-42 inclusive.\n");
         result = BAD_INPUT;
     }
-    //all validationg complete, now pass by reference to the caller and cast as an int
+    //all validating complete, now pass by reference to the caller and cast as an int
     *num = (int)converted_input;
     
-    //all errors checked, so return result
+    //all edge case for wrong input checked, so return result
     return result;
 } // end get_input
 
@@ -230,7 +231,7 @@ int print_list(value_t *start)
             current = current->next; //traversing the linked list
             count ++;
         }
-        printf(RESET_COLOR); //reset color to black
+        printf(RESET_COLOR); //reset color after printing out the values
     }
 
     return result;
@@ -269,7 +270,7 @@ int calc_total(value_t *start, long int *total)
         }
     
     *total = (long int)count;
-    // return the total back to main
+    // provide the total back to main
     }
     return result;
 } // end calc_total
