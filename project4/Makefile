@@ -7,7 +7,7 @@ all: overflow
 overflow: overflow.c
 	gcc -Wall -g -lm overflow.c -o overflow
 
-proj4.tar: Makefile randadd.c
+proj4.tar: Makefile overflow.c
 	tar -cvf proj4.tar Makefile overflow.c
 
 clean:

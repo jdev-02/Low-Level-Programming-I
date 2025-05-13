@@ -5,8 +5,8 @@
 //
 // Description: This file implements a program that will build a dynamically
 //      allocated array with large random whole values, displaying those vals
-//      with their running total, and denoting if there is overflow.
-//        
+//      with their running total, and denoting if there is overflow for an unsigned integer on a 32 bit system.
+//      
 // Syntax:
 //      ./overflow number //number is the # of random values to be generated
 //      for output, between 1 and 20, inclusive.
@@ -43,11 +43,13 @@
 #define INVALID_NUMBER 2
 #define MALLOC_ERROR   3
 #define BAD_INPUT      4
+#define BAD_BUILD      5
+#define BAD_PRINT      6
 
 // ------------------------ P R O T O T Y P E S -------------------------
 
 int get_input(int argc, char *argv[], unsigned int *num);
-int build_list(const int num, unsigned int value_list[]);
+int build_array(const int num, unsigned int value_list[]);
 int print_values(unsigned int value_list[]);
 
 // **************************  M  A  I  N  ******************************
@@ -74,7 +76,7 @@ int main (int argc, char *argv[]) {
     srandom(time(NULL)*getpid());
 
     result = get_input(argc, argv, &num);
-    //get num of args after error handling
+    //get num of args after error handling in function
 
     if (result == SUCCESS) {
         errno = SUCCESS;
@@ -83,41 +85,37 @@ int main (int argc, char *argv[]) {
         //error handle for malloc
         if (value_list == NULL) {
             //memory allocation failure
-            if (errno == SUCCESS){
                 result = MALLOC_ERROR;
-                perror("Unable to start the list.");
-            } else {
-                result = errno;
-                perror("Issue encountered when starting the list.");
-            }
+                perror("Unable to allocate memory for the array.");
+                return result;
         }
     }
 
-    // Build the dynamic list
+    // Build the dynamic array
     if (result == SUCCESS) {
-        result = build_list(num, value_list);
+        result = build_array(num, value_list);
         if (result != SUCCESS) {
             free(value_list);
-            printf("Error: problem building list\n");
-            return BAD_POINTER;
+            value_list = NULL;
+            printf("Error: problem building array\n");
+            return BAD_BUILD;
         }
     }
 
-    // Print out dynamic list
+    // Print out dynamic array
     if (result == SUCCESS) {
         result = print_values(value_list);
-        //free the dynamic list
+        //free the dynamic array
         free(value_list);
         value_list = NULL;
 
         if (result != SUCCESS) {
             free(value_list);
+            value_list = NULL;
             printf("Error printing the list\n");
-            return BAD_POINTER;
+            return BAD_PRINT;
         }
     }
-
-    
 
     return result;
 }
@@ -144,7 +142,7 @@ int main (int argc, char *argv[]) {
 int get_input(int argc, char *argv[], unsigned int *num) {
     errno = 0; //for strtol call
     char *endnum = NULL; //for strtol call
-    int result = SUCCESS; //default success
+    int result = SUCCESS;
 
     //handle bad input cases - bad arg count/wrong args/invalid number
     if (argc != VALID_NUM_ARGS) {
@@ -190,7 +188,7 @@ int get_input(int argc, char *argv[], unsigned int *num) {
 //     addition, this function initializes the 'val' member of each
 //     struct to a random integer in the range provided by MAX_VALUE.
 // ---------------------------------------------------------------------
-int build_list(const int num, unsigned int value_list[]){
+int build_array(const int num, unsigned int value_list[]){
     int result = SUCCESS;
     unsigned int i;
     
@@ -252,9 +250,9 @@ int print_values(unsigned int value_list[]){
             printf("%5d %9u %10u\n",count,*value_list,running_total);
             
         }
-        //increment place in list and counter
-        value_list ++;
-        count ++;
+        //increment place in list and counter postfix
+        value_list++;
+        count++;
         }
 
     return result;

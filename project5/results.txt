@@ -1,0 +1,17 @@
+LTJG JONATHAN GOOHS
+
+1. Typical compiler options (using dynamic linking)
+    a. Real time = 0m5.849s
+    b. yahtzee size = 32880 
+
+2. --static linking
+    a. Real time = 0m6.287s
+    b. yahtzee size = 846792 
+
+3. -O2 (optimize speed of application even if it takes longer to compile)
+    a. Real time = 0m5.602s
+    b. yahtzee size = 52536
+    
+4. -Os (optimize code size even if it takews longer to compile)
+    a. Real time = 0m4.172s
+    b. yahtzee size = 46424
