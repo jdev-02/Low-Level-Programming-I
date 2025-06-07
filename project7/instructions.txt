@@ -1,0 +1,5 @@
+
+ctrl backslash will change to nonmilitary time
+print all applicable errors to stderr
+registration of signals shall make the other signals be masked sigfillset
+
