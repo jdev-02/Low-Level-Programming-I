@@ -1,4 +1,3 @@
-// ------------------------------------------------------------------
 // File: main.c
 //
 // Name: Al Shaffer & Paul Clark & Jonathan Goohs
@@ -37,10 +36,12 @@
 #include "display.h"
 
 
-#define SECS_PER_DAY       86400
-#define SECS_PER_HOUR       3600
-#define SECS_PER_MIN          60
-#define HALFSECOND        500000
+#define SECS_PER_DAY        86400
+#define SECS_PER_HOUR        3600
+#define SECS_PER_MIN           60
+#define HALFSECOND         500000
+#define HOURS_PER_DAY          24
+#define HOURS_PER_H_DAY        12
 
 #define MOVE_CURSOR "\x1b[%d;%dH"
 #define HIDE_CURSOR   "\x1b[?25l"
@@ -54,6 +55,7 @@
 #define RED            "\x1b[31m"
 #define GREEN          "\x1b[32m"
 #define DEFAULT_COLOR   "\x1b[0m"
+
 #define START_COLOR            0
 #define RED_COLOR              1
 #define GREEN_COLOR            2
@@ -69,10 +71,22 @@
 #define PROMPT_START_ROW      18
 #define PROMPT_START_COL       1
 
-#define STATS_START_ROW       12
+#define STATS_START_ROW       14
 #define STATS_START_COL        1
 #define NOT_CR                 1
+#define CLEAR_LINE   "%-79s", ""
 
+#define SIGEMPTY_GVAL          0
+#define SIGACTION_GVAL         0
+#define ATEXIT_GVAL            0
+#define TCFUNC_GVAL            0
+#define PTHREAD_ATTR_GVAL      0
+#define PTHREAD_MUTEX_GVAL     0
+#define PTHREAD_CREAT_GVAL     0
+#define PTHREAD_JOIN_GVAL      0
+#define TOTAL_COLORS           3
+#define TIME_GVAL              0
+#define RUSAGE_GVAL            0
 
 // ------------------------------------------------------------------
 // Global variables
@@ -81,8 +95,9 @@ pthread_mutex_t Screen_lock;
 bool Finished =                     false;
 bool Miltime  =                      true;
 // add any other needed globals
-int current_color_i =   COLOR_SWITCH_CASE;
-int mil_civ_display = MIL_CIV_SWITCH_CASE;
+int current_color =   COLOR_SWITCH_CASE;
+struct termios og_term;
+
 //set by tzset()
 extern long timezone;
 extern int daylight;
@@ -105,7 +120,6 @@ int main(void)
     struct sigaction sa;
     int siga_rval;
     int sigmask_rval;
-    struct termios term_dis; //for disabling echo commands
     int tc_rval;
     
     pthread_t time_thread;
@@ -123,7 +137,7 @@ int main(void)
     // Prepare signal action settings
     sa.sa_handler = signal_handler; //set the hanlder function
     errno = 0;
-    if ((sigmask_rval = sigemptyset(&sa.sa_mask) || errno) != 0  ) {
+    if ((sigmask_rval = sigemptyset(&sa.sa_mask) || errno) != SIGEMPTY_GVAL ) {
         perror("Error masking signals");
         return result = EXIT_FAILURE;
     }
@@ -132,7 +146,7 @@ int main(void)
     //Register handler for interrupt signal
     errno = 0;
     siga_rval = sigaction(SIGINT, &sa, NULL);
-    if (siga_rval != 0) {
+    if (siga_rval != SIGACTION_GVAL) {
         fprintf(stderr, "Unable to pass interrupt signal for color change: %s\n",
                 strerror(errno));
         return result = EXIT_FAILURE;
@@ -141,7 +155,7 @@ int main(void)
     //Register handler for terminal stop signal
     errno = 0;
     siga_rval = sigaction(SIGQUIT, &sa, NULL);
-    if (siga_rval != 0) {
+    if (siga_rval != SIGACTION_GVAL) {
         fprintf(stderr, "Unable to pass quit signal to change clock display mode: %s\n",
                 strerror(errno));
         return result = EXIT_FAILURE;
@@ -149,22 +163,23 @@ int main(void)
     
     //call cleanup function through atexit()
     int atexit_rval = atexit(clean_display);
-    if (atexit_rval != 0) {
+    if (atexit_rval != ATEXIT_GVAL) {
         fprintf(stderr, "atexit call to clean display failed.");
         return result = EXIT_FAILURE;
     }
 
     errno = 0;
-    tc_rval = tcgetattr(STDIN_FILENO, &term_dis);
-    if (tc_rval || errno != 0 ) {
+    tc_rval = tcgetattr(STDIN_FILENO, &og_term);
+    if (tc_rval || errno != TCFUNC_GVAL ) {
         perror("Error getting terminal attributes");
         return result = EXIT_FAILURE;
     }
     //disable echo mode
-    term_dis.c_lflag |= ~ECHO; //from man page raw mode section
+    struct termios new_term = og_term;
+    new_term.c_lflag &= ~ECHO; //from man page raw mode section
     errno = 0;
-    tc_rval = tcsetattr(STDIN_FILENO, TCSANOW, &term_dis); //makes the change immediately via tcsanow 
-    if (tc_rval || errno != 0) {
+    tc_rval = tcsetattr(STDIN_FILENO, TCSANOW, &new_term); //makes the change immediately via tcsanow 
+    if (tc_rval || errno != TCFUNC_GVAL) {
         perror("Error disabling echo mode");
         return result = EXIT_FAILURE;
     }
@@ -172,87 +187,99 @@ int main(void)
     printf(HIDE_CURSOR);
     printf(CLEAR_SCREEN);
 
-    pthread_mutex_init(&Screen_lock, NULL); //initialize screen lock mutex using default lock attributes
+    if (pthread_mutex_init(&Screen_lock, NULL) != PTHREAD_MUTEX_GVAL) {
+        fprintf(stderr, "Error initializing mutex: %s\n", strerror(errno));
+        return result = EXIT_FAILURE;
+    } //initialize screen lock mutex using default lock attributes
     //start time thread
     pthread_attr_init(&timeattr);
     timeattr_rval = pthread_attr_setdetachstate(&timeattr, PTHREAD_CREATE_JOINABLE);
-    if (timeattr_rval != 0) {
+    if (timeattr_rval != PTHREAD_ATTR_GVAL) {
         fprintf(stderr, "Error: pthread_attr_setdetachstate failed with code %d\n", timeattr_rval);
+        pthread_attr_destroy(&timeattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
     timeattr_rval = pthread_attr_setscope(&timeattr, PTHREAD_SCOPE_SYSTEM);
-    if (timeattr_rval != 0) {
+    if (timeattr_rval != PTHREAD_ATTR_GVAL) {
         fprintf(stderr, "Error: pthrtead_attr_setscope failed with code %d\n", timeattr_rval);
+        pthread_attr_destroy(&timeattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
     time_rval = pthread_create(&time_thread, &timeattr, mil_time, NULL);
-    if (time_rval != 0) {
+    if (time_rval != PTHREAD_CREAT_GVAL) {
         fprintf(stderr, "Error creating time thread.");
+        pthread_attr_destroy(&timeattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
     pthread_attr_init(&statsattr);
     statsattr_rval = pthread_attr_setdetachstate(&statsattr, PTHREAD_CREATE_JOINABLE);
-    if (statsattr_rval != 0) {
+    if (statsattr_rval != PTHREAD_ATTR_GVAL) {
         fprintf(stderr, "Error: pthread_attr_setdetachstate failed with code %d\n", statsattr_rval);
+        pthread_attr_destroy(&statsattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
     statsattr_rval = pthread_attr_setscope(&statsattr, PTHREAD_SCOPE_SYSTEM);
-    if (statsattr_rval != 0) {
+    if (statsattr_rval != PTHREAD_ATTR_GVAL) {
         fprintf(stderr, "Error: pthread_attr_setscope failed wit5h code %d\n", statsattr_rval);
+        pthread_attr_destroy(&statsattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
     stats_rval = pthread_create(&stats_thread, &statsattr, clock_stats, NULL);
-    if (stats_rval != 0 ){
+    if (stats_rval != PTHREAD_CREAT_GVAL ){
         fprintf(stderr, "Error creating statistics thread.");
+        pthread_attr_destroy(&statsattr);
+        pthread_mutex_destroy(&Screen_lock);
         return result = EXIT_FAILURE;
     }
+    pthread_attr_destroy(&timeattr);
+    pthread_attr_destroy(&statsattr);
     
     //lock the tterminal
     pthread_mutex_lock(&Screen_lock);
     //display user prompt for interrupts
+
     int row = PROMPT_START_ROW;
     int col = PROMPT_START_COL;
     printf(MOVE_CURSOR, row, col);
+
     printf("Press Ctrl-C to change clock color.\n");
     printf("Press Ctrl-\\ to change clock time format.\n");
     printf("Press CR to Exit.\n");
+
+    fflush(stdout);
     //unlcok the terminal
     pthread_mutex_unlock(&Screen_lock);
     //wait for CR
     int c;
-    while (NOT_CR) {
-        errno = 0;
-        c = getchar();
-        //error handle via fgetc man page
-        if (c == EOF  || errno != 0 ) {
-            perror("get char error\n");
-            return result = EXIT_FAILURE;
-        }
-        if (c== '\n' || c == '\r') {
-            break;
+    while ((c = getchar()) != EOF) {
+        if (c == '\n' || c == '\r') {
+            break; //if CR then done
         }
     }
-    
+
     //at this point the user has hit CR
     Finished = true;
 
     //wait for threadds to finish
     timejoin_rval = pthread_join(time_thread, NULL);
-    if (timejoin_rval !=0) {
+    if (timejoin_rval != PTHREAD_JOIN_GVAL) {
         fprintf(stderr, "Error: pthread_join failed with code %d\n", timejoin_rval);
         return result = EXIT_FAILURE;
     }
     statsjoin_rval = pthread_join(stats_thread, NULL);
-    if (statsjoin_rval != 0) {
+    if (statsjoin_rval != PTHREAD_JOIN_GVAL) {
         fprintf(stderr, "Error: pthread_join failed with code %d\n", statsjoin_rval);
         return result = EXIT_FAILURE;
     }
     printf("made it to end of main function.\n");
     pthread_mutex_destroy(&Screen_lock);
     return result = EXIT_SUCCESS;
-    fflush(stdout);
 
-    
     //now cleanup function will run and program will end safely
     
 
@@ -264,13 +291,10 @@ int main(void)
 // ------------------------------------------------------------------
 
 void signal_handler(int sig){
-        
-        
         //wrap around to each index upon press
         if (sig == SIGINT) {
-            current_color_i = (current_color_i +1) % 3;
-        }
-        if (sig == SIGQUIT) {
+            current_color = (current_color +1) % TOTAL_COLORS;
+        } else if (sig == SIGQUIT) {
         Miltime = !Miltime;
         }
     }
@@ -283,31 +307,43 @@ void *mil_time(void * arg) {
         
         errno = 0;
         long epoch_secs = time(NULL);
-        if (errno != 0) {
+        if (errno != TIME_GVAL) {
             perror("Error calling time function");
             pthread_exit(NULL);
         }
         
         long adjusted_time = epoch_secs - timezone;
+        adjusted_time += (daylight * SECS_PER_HOUR); //always apply DST
+
         int hours = (adjusted_time % SECS_PER_DAY) / SECS_PER_HOUR;
         int min = (adjusted_time % SECS_PER_HOUR) / SECS_PER_MIN;
 
-        hours += daylight; //continue applynig daylight savings
+
+        //wrap around for 24 hours cycle from total amount of hours
+        if (hours >= HOURS_PER_DAY) {
+            hours -= HOURS_PER_DAY;
+        } else if (hours <0) {
+            hours += HOURS_PER_DAY;
+        }
+
         //handling mil time switch
-        int hour;
+        int hour = hours;
         if (!Miltime) {
             if (hours == 0) {
-                hour = 12;
-            } else if (hours > 12) {
-                hour = hours - 12;
+                hour = HOURS_PER_H_DAY;
+            } else if (hours > HOURS_PER_H_DAY) {
+                hour = hours - HOURS_PER_H_DAY;
             }
         }
 
         pthread_mutex_lock(&Screen_lock);
-        switch(current_color_i) {
+        switch(current_color) {
             case RED_COLOR : printf(RED);
             break;
             case GREEN_COLOR: printf(GREEN);
+            break;
+            default:
+            printf(DEFAULT_COLOR);
             break;
         }
         display_time(DISPLAY_START_ROW, DISPLAY_START_COL, hour, min);
@@ -327,12 +363,20 @@ void *clock_stats(void *arg) {
         struct rusage usage; //declare struct for getusage call
         int usage_rval = getrusage(RUSAGE_SELF, &usage);
         errno = 0;
-        if (usage_rval || errno != 0) {
+        if (usage_rval || errno != RUSAGE_GVAL) {
             perror("Issues getting usage stats for calling process.");
             pthread_exit(NULL);
         }
         pthread_mutex_lock(&Screen_lock);
-        printf("\n\nUser CPU time\t : %ld sec., %ld microsec.\n", usage.ru_utime.tv_sec, usage.ru_utime.tv_usec);
+        printf(MOVE_CURSOR, STATS_START_ROW, STATS_START_COL);
+        printf(CLEAR_LINE); //to avoid overprinting lines
+        printf(DEFAULT_COLOR);
+        printf(MOVE_CURSOR, STATS_START_ROW, STATS_START_COL);
+        printf("User CPU time\t : %ld sec., %ld microsec.", usage.ru_utime.tv_sec, usage.ru_utime.tv_usec);
+        printf(MOVE_CURSOR, STATS_START_ROW+1, STATS_START_COL);
+        printf(CLEAR_LINE);
+        printf(DEFAULT_COLOR);
+        printf(MOVE_CURSOR, STATS_START_ROW+1, STATS_START_COL);
         printf("System CPU time  : %ld sec., %ld microsec.", usage.ru_stime.tv_sec, usage.ru_stime.tv_usec);
         fflush(stdout);
         pthread_mutex_unlock(&Screen_lock);
@@ -345,23 +389,22 @@ void *clock_stats(void *arg) {
 
 void clean_display(void) {
     printf("in cleanup function");
-    struct termios term;
     int row = CLEANUP_ROW_TERM;
     int col = CLEANUP_COL_TERM;
     //reset display color back to default
-    current_color_i = START_COLOR;
+    current_color = START_COLOR;
     //turn cursor back on
     printf(SHOW_CURSOR);
     //turn back on keyboard input echoing
     
-    int tcg_rval = tcgetattr(STDIN_FILENO, &term);
+    int tcg_rval = tcgetattr(STDIN_FILENO, &og_term);
     if (tcg_rval != 0 ) {
         perror("Error getting terminal attributes");
     }
     //enable echo mode
-    term.c_lflag |= ECHO; //from man page raw mode section
+    og_term.c_lflag |= ECHO; //from man page raw mode section
     
-    int tcs_rval = tcsetattr(STDIN_FILENO, TCSANOW, &term); //makes the change immediately via tcsanow 
+    int tcs_rval = tcsetattr(STDIN_FILENO, TCSANOW, &og_term); //makes the change immediately via tcsanow 
     if (tcs_rval != 0) {
         perror("Error enabling echo mode");
     }
